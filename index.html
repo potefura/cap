@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ログイン - Potefura Captcha Demo</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #2d2640 0%, #171322 50%, #d86943 100%);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Hiragino Sans", "Yu Gothic", sans-serif;
+    }
+
+    .login-card {
+      width: 100%;
+      max-width: 340px;
+      padding: 32px 24px;
+      background: #ffffff;
+      border-radius: 16px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+      box-sizing: border-box;
+    }
+
+    .login-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #1c1a2e;
+      margin: 0 0 6px 0;
+      text-align: center;
+    }
+
+    .login-subtitle {
+      font-size: 12px;
+      color: #7d7a8c;
+      margin: 0 0 24px 0;
+      text-align: center;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-group label {
+      display: block;
+      font-size: 11px;
+      color: #5f5c70;
+      margin-bottom: 6px;
+    }
+
+    .form-group input[type="text"],
+    .form-group input[type="password"] {
+      width: 100%;
+      padding: 10px 12px;
+      font-size: 14px;
+      border: 1px solid #e4e1ea;
+      border-radius: 8px;
+      box-sizing: border-box;
+      outline: none;
+    }
+
+    .btn-login {
+      width: 100%;
+      padding: 12px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #ffffff;
+      background-color: #8b5cf6;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background-color 0.2s, opacity 0.2s;
+    }
+
+    .btn-login:disabled {
+      background-color: #c4c2cb;
+      cursor: not-allowed;
+      opacity: 0.7;
+    }
+
+    .auth-msg {
+      font-size: 11px;
+      color: #a09daf;
+      text-align: center;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="login-card">
+    <h1 class="login-title">おかえりなさい</h1>
+    <p class="login-subtitle">アカウントにログインしてください</p>
+
+    <form id="loginForm" onsubmit="return false;">
+      <div class="form-group">
+        <label for="username">ユーザー名</label>
+        <input type="text" id="username" name="username" autocomplete="off">
+      </div>
+
+      <div class="form-group">
+        <label for="password">パスワード</label>
+        <input type="password" id="password" name="password" autocomplete="off">
+      </div>
+
+      <!-- Captchaボックス -->
+      <div id="potefura-captcha"></div>
+
+      <!-- トークン格納場所 -->
+      <input type="hidden" id="cap_id" name="cap_id">
+      <input type="hidden" id="cap_token" name="cap_token">
+
+      <button type="button" id="loginBtn" class="btn-login" disabled>ログイン</button>
+      <div class="auth-msg" id="authMsg">認証が必要です</div>
+    </form>
+  </div>
+
+  <script src="script.js?v=4"></script>
+
+  <script>
+    // キャプチャクリア時にボタン有効化 & トークン保存
+    document.addEventListener('captchaSuccess', function (e) {
+      var capCheck = document.getElementById('capCheck');
+      if (capCheck) capCheck.checked = true;
+
+      document.getElementById('cap_id').value = e.detail.id;
+      document.getElementById('cap_token').value = e.detail.token;
+
+      var loginBtn = document.getElementById('loginBtn');
+      if (loginBtn) loginBtn.disabled = false;
+
+      var authMsg = document.getElementById('authMsg');
+      if (authMsg) {
+        authMsg.textContent = 'キャプチャ認証完了';
+        authMsg.style.color = '#2f8f6b';
+      }
+    });
+
+    // モーダル閉じた時
+    document.addEventListener('captchaClose', function () {
+      var capCheck = document.getElementById('capCheck');
+      if (capCheck && !document.getElementById('cap_token').value) {
+        capCheck.checked = false;
+      }
+    });
+
+    // ★ ログインボタンクリック時の処理（トークン検証） ★
+    document.getElementById('loginBtn').addEventListener('click', function () {
+      var sid = document.getElementById('cap_id').value;
+      var token = document.getElementById('cap_token').value;
+      var username = document.getElementById('username').value;
+      var password = document.getElementById('password').value;
+      var authMsg = document.getElementById('authMsg');
+      var loginBtn = this;
+
+      if (!username || !password) {
+        alert('ユーザー名とパスワードを入力してください');
+        return;
+      }
+
+      if (!sid || !token) {
+        alert('キャプチャ認証を行ってください');
+        return;
+      }
+
+      // ボタンを無効化して検証中メッセージ表示
+      loginBtn.disabled = true;
+      authMsg.textContent = 'トークンを検証中...';
+      authMsg.style.color = '#5f5c70';
+
+      // script.js で定義した検証関数を呼び出す
+      window.verifyCaptchaToken(sid, token)
+        .then(function (res) {
+          if (res.data && res.data.verified) {
+            // トークン検証成功！
+            authMsg.textContent = 'ログイン成功！';
+            authMsg.style.color = '#2f8f6b';
+            alert('ログインに成功しました！');
+          } else {
+            // トークン検証失敗（無効、期限切れ、使用済みなど）
+            var reason = (res.data && res.data.reason) || '検証失敗';
+            authMsg.textContent = '認証エラー: ' + reason;
+            authMsg.style.color = '#c94b3f';
+            alert('ログインに失敗しました: ' + reason);
+            
+            // 再認証用にキャプチャ状態をリセット
+            document.getElementById('cap_id').value = '';
+            document.getElementById('cap_token').value = '';
+            var capCheck = document.getElementById('capCheck');
+            if (capCheck) capCheck.checked = false;
+          }
+        })
+        .catch(function (err) {
+          authMsg.textContent = '通信エラーが発生しました';
+          authMsg.style.color = '#c94b3f';
+          alert('検証APIとの通信に失敗しました');
+          console.error(err);
+        })
+        .finally(function () {
+          loginBtn.disabled = false;
+        });
+    });
+  </script>
+</body>
+</html>
